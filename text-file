@@ -1,0 +1,296 @@
+import { Component, OnInit } from '@angular/core';
+
+import * as _ from 'lodash';
+import { forEach } from 'lodash';
+import * as moment from 'moment-timezone';
+
+@Component({
+  selector: 'app-my-tester',
+  templateUrl: './my-tester.component.html',
+  styleUrls: ['./my-tester.component.scss']
+})
+export class MyTesterComponent implements OnInit {
+
+  hasErrorGetAttendanceDetailsText = "";
+  pendingAttendanceDetailsRequest: any;
+  detailTitle: any;
+  runGetLogDetailsLoader: boolean = true;
+  getLogDetails: any;
+  currentTimezone = "+08:00";
+  detailSchedTime = "";
+
+  constructor() { }
+
+  ngOnInit(): void {
+    // moment().tz("Asia/Shanghai").format();
+    console.time('getAttendanceDetail() processing time:');
+
+    this.getAttendanceDetail();
+
+    console.timeEnd('getAttendanceDetail() processing time:');
+  }
+
+  getAttendanceDetail() {
+    let date = "2022-06-16";
+    let data = {
+      dayType: "regular",
+      schedTime: "9:00am - 6:00pm",
+      // Morning Scenario
+      // schedStartTimeUTC: "2022-05-16 01:00:00 +00:00",
+      // schedEndTimeUTC: "2022-05-16 10:00:00 +00:00"
+
+      // Graveyard Shift
+      schedStartTimeUTC: "2022-06-16 00:00:00 +00:00",
+      schedEndTimeUTC: "2022-06-16 08:00:00 +00:00"
+    };
+
+    let parent = this;
+
+    let outputArray = new Array();
+
+    this.detailTitle = date;
+    this.runGetLogDetailsLoader = true;
+    this.detailSchedTime = data.schedTime;
+
+    parent.getLogDetails = [];
+
+    let tzoffset = "+08:00";
+
+    tzoffset = tzoffset == null ? parent.currentTimezone : tzoffset;
+
+    var tzchar = tzoffset.charAt(0);
+
+    // Ajax fetchers
+    let mergedLogsDetails = new Array();
+    let fetchedTimelogs = new Array();
+    let fetchedOBlogs = new Array();
+    let rawTimeLogsArr = new Array();
+    let timeLogsPresentation = new Array();
+    let timeLogArrayPlot = new Array();
+    let startProgressBarTime: any;
+
+    // Progress Bar variables
+    let compPreProgressBarTime: any;
+    let compEndTime: any;
+    let compStartTime: any;
+    let timeDiffPreShadeProgressBar: any;
+    let timeDifference: any;
+    let diffPreProgressBar = 0;
+    let diffInHours: any;
+    let hoursInPreProgressBar = 0;
+    let hoursInProgressBar = 0;
+
+    if (tzchar == "+") {
+      tzoffset = tzoffset;
+    } else if (tzchar != "-") {
+      tzoffset = "+" + tzoffset;
+    }
+
+    let scheduleTime = new Array();
+
+    if (data.schedStartTimeUTC != "" && data.schedEndTimeUTC != "") {
+      scheduleTime.push({ dateTime: data.schedStartTimeUTC, source: data.dayType });
+      scheduleTime.push({ dateTime: data.schedEndTimeUTC, source: data.dayType });
+    }
+
+    // sir Edzel Sample Response
+    let resp = {
+      "timeLogs": [
+        {
+          "dateTime": "2022-06-15 23:55:00 +00:00",
+          "source": "webbundyclock"
+        },
+        {
+          "dateTime": "2022-06-16 08:10:00 +00:00",
+          "source": "webbundyclock"
+        }
+      ], "leave": [], "overTime": [], "officialBusiness": [], "changeSchedule": []
+    };
+    console.log("Sir Edzel data sample", resp);
+    // ---------------------------------------------------------------------------------------------------------------------------------
+    fetchedTimelogs = (resp.timeLogs.length >= 0) ? resp.timeLogs : [];
+    fetchedOBlogs = (resp.officialBusiness.length > 0) ? resp.officialBusiness : [];
+
+    mergedLogsDetails = fetchedTimelogs;
+    mergedLogsDetails = scheduleTime.concat(mergedLogsDetails);
+    mergedLogsDetails = _.sortBy(mergedLogsDetails, ['dateTime']);
+
+    mergedLogsDetails = mergedLogsDetails.map((rawDateTime) => {
+      return { dateTime: moment(rawDateTime.dateTime).format('YYYY-MM-DD HH:mm:ss ') + tzoffset, source: rawDateTime.source };
+    });
+    console.log("mergedLogsDetails", mergedLogsDetails);
+
+    let GYelevenFiftyNine: any;
+    let GYtwelveMidnight: any;
+
+    mergedLogsDetails.forEach((rawLogJson, rawLogIndex) => {
+
+      switch (rawLogIndex) {
+        case 0:
+          timeLogArrayPlot.push(rawLogJson);
+          break;
+        default:
+          if (moment(rawLogJson.dateTime).isAfter(mergedLogsDetails[rawLogIndex - 1].dateTime, 'day')) { // IF Previous dateTime isBefore(current DateTime)
+            GYelevenFiftyNine = moment(mergedLogsDetails[rawLogIndex - 1].dateTime).format('YYYY-MM-DD') + ' 23:59:00 ' + tzoffset;
+            GYtwelveMidnight = moment(mergedLogsDetails[rawLogIndex].dateTime).format('YYYY-MM-DD') + ' 00:00:00 ' + tzoffset;
+
+            timeLogArrayPlot.push({
+              dateTime: GYelevenFiftyNine,
+              source: 'next day'
+            });
+
+            timeLogArrayPlot.push({
+              dateTime: GYtwelveMidnight,
+              source: 'yesterday'
+            });
+
+            timeLogArrayPlot.push(rawLogJson);
+
+          } else {
+            timeLogArrayPlot.push(rawLogJson);
+          }
+      }
+
+    });
+    console.log("timeLogArrayPlot", timeLogArrayPlot);
+
+    rawTimeLogsArr = timeLogArrayPlot.reduce((a, i) => a.concat(i, i), []);
+    rawTimeLogsArr = _.dropRight(_.tail(rawTimeLogsArr));
+    rawTimeLogsArr = _.chunk(rawTimeLogsArr, 2);
+
+    console.log("rawTimeLogsArr", rawTimeLogsArr);
+
+
+
+    rawTimeLogsArr.forEach((rowLogArr, rowLogIndex) => {
+      startProgressBarTime = moment(date).format("YYYY-MM-DD ") + " 00:00:00 " + tzoffset;
+
+      let presentationLog = {
+        date: moment(date).format('MMMM DD, YYYY'),
+        startTimeText: "",
+        startDateTime: "",
+        startSource: "",
+        endTimeText: "",
+        endDateTime: "",
+        endSource: "",
+        hasPreTime: false,
+        hasPostTime: false,
+        preProgressBar: 0,
+        hoursInProgressBar: 0,
+        logType: "",
+        isOB: false,
+        status: "",
+      };
+
+      rowLogArr.forEach((colLogArr, colLogIndex) => {
+        // fetchedTimelogs.length > 0
+        // startTimeText: "Absent",
+        switch (colLogIndex) {
+          case 0:
+            presentationLog.startDateTime = colLogArr.dateTime;
+            presentationLog.startSource = (fetchedTimelogs.length > 0) ? colLogArr.source : "";
+            presentationLog.startTimeText = (fetchedTimelogs.length > 0) ? moment(colLogArr.dateTime).format('hh:mm A') : "Absent";
+            break;
+          default:
+            presentationLog.endDateTime = colLogArr.dateTime;
+            presentationLog.endSource = (fetchedTimelogs.length > 0) ? colLogArr.source : "";
+            presentationLog.endTimeText = (fetchedTimelogs.length > 0) ? moment(colLogArr.dateTime).format('hh:mm A') : "";
+            break;
+        }
+
+        presentationLog.startSource = (fetchedTimelogs.length > 0) ? presentationLog.startSource : this.detailSchedTime;
+        presentationLog.logType = "Regular";
+      });
+
+      // Progress Bar
+      compPreProgressBarTime = moment(startProgressBarTime);
+      compStartTime = moment(presentationLog.startDateTime);
+      compEndTime = moment(presentationLog.endDateTime);
+
+      timeDiffPreShadeProgressBar = moment.duration(compStartTime.diff(compPreProgressBarTime));
+      timeDifference = moment.duration(compEndTime.diff(compStartTime));
+
+      diffPreProgressBar = timeDiffPreShadeProgressBar.asHours();
+      diffInHours = timeDifference.asHours();
+
+      hoursInPreProgressBar = diffPreProgressBar * 4.16;
+      hoursInProgressBar = diffInHours * 4.16;
+
+      presentationLog.preProgressBar = hoursInPreProgressBar;
+      presentationLog.hoursInProgressBar = hoursInProgressBar;
+
+      presentationLog.hasPreTime = compStartTime.isBefore(data.schedStartTimeUTC);
+      presentationLog.hasPostTime = compEndTime.isAfter(data.schedEndTimeUTC);
+
+      hoursInProgressBar > 0.00 && timeLogsPresentation.push(presentationLog); // only pushed if starttime & endtime are not the same values
+
+    });
+
+    timeLogsPresentation = timeLogsPresentation.filter((obj) => {
+      return moment(obj.startDateTime).format('hh:mm A') != '11:59 PM' && moment(obj.endDateTime).format('hh:mm A') != '12:00 AM';
+    });
+
+    timeLogsPresentation = _.orderBy(timeLogsPresentation, ['startDateTime']);
+
+    // Fetching OB fillings
+    let OBlogs = new Array();
+
+    if (fetchedOBlogs.length > 0) {
+      fetchedOBlogs.forEach((OBrow) => {
+        let OBlog = {
+          date: moment(OBrow.startTime).format('MMMM DD, YYYY'),
+          startTimeText: "",
+          startDateTime: "",
+          startSource: "",
+          endTimeText: "",
+          endDateTime: "",
+          endSource: "",
+          hasPreTime: false,
+          hasPostTime: false,
+          preProgressBar: 0,
+          hoursInProgressBar: 0,
+          logType: "official_business",
+          isOB: true,
+          status: ""
+        };
+
+        OBlog.startDateTime = moment(OBrow.startTime).format('YYYY-MM-DD HH:mm:ss ') + tzoffset;
+        OBlog.endDateTime = moment(OBrow.endTime).format('YYYY-MM-DD HH:mm:ss ') + tzoffset;
+        OBlog.startTimeText = moment(OBrow.startTime).format('hh:mm A');
+        OBlog.endTimeText = moment(OBrow.endTime).format('hh:mm A');
+        OBlog.startSource = "Official Business";
+        OBlog.endSource = "Official Business";
+        OBlog.status = OBrow.status;
+
+        // Progress Bar
+        compPreProgressBarTime = moment(startProgressBarTime);
+        compStartTime = moment(OBlog.startDateTime);
+        compEndTime = moment(OBlog.endDateTime);
+
+        timeDiffPreShadeProgressBar = moment.duration(compStartTime.diff(compPreProgressBarTime));
+        timeDifference = moment.duration(compEndTime.diff(compStartTime));
+
+        diffPreProgressBar = timeDiffPreShadeProgressBar.asHours();
+        diffInHours = timeDifference.asHours();
+
+        hoursInPreProgressBar = diffPreProgressBar * 4.16;
+        hoursInProgressBar = diffInHours * 4.16;
+
+        OBlog.preProgressBar = hoursInPreProgressBar;
+        OBlog.hoursInProgressBar = hoursInProgressBar;
+
+        OBlog.hasPreTime = compStartTime.isBefore(data.schedStartTimeUTC);
+        OBlog.hasPostTime = compEndTime.isAfter(data.schedEndTimeUTC);
+
+        OBlogs.push(OBlog);
+      });
+    }
+
+    outputArray = timeLogsPresentation.concat(OBlogs);
+    // outputArray = _.sortBy(outputArray, ['startDateTime']);
+    // outputArray = _.uniqBy(outputArray, "startTimeText");
+    console.log("Final Array Output", outputArray);
+
+    parent.getLogDetails = outputArray;
+  }
+}
