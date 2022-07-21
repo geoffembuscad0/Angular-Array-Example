@@ -1,3 +1,5 @@
+typescript my-tester component
+==============================================================
 import { Component, OnInit } from '@angular/core';
 
 import * as _ from 'lodash';
@@ -31,7 +33,7 @@ export class MyTesterComponent implements OnInit {
   }
 
   getAttendanceDetail() {
-    let date = "2022-06-16";
+    let date = "2022-07-07";
     let data = {
       dayType: "regular",
       schedTime: "9:00am - 6:00pm",
@@ -40,8 +42,8 @@ export class MyTesterComponent implements OnInit {
       // schedEndTimeUTC: "2022-05-16 10:00:00 +00:00"
 
       // Graveyard Shift
-      schedStartTimeUTC: "2022-06-16 00:00:00 +00:00",
-      schedEndTimeUTC: "2022-06-16 08:00:00 +00:00"
+      "schedStartTimeUTC": "2022-07-07T16:00:00+00:00",
+      "schedEndTimeUTC": "2022-07-08T01:00:00+00:00"
     };
 
     let parent = this;
@@ -63,6 +65,8 @@ export class MyTesterComponent implements OnInit {
     // Ajax fetchers
     let mergedLogsDetails = new Array();
     let fetchedTimelogs = new Array();
+    let fetchedLeaves = new Array();
+    let fetchedOTs = new Array();
     let fetchedOBlogs = new Array();
     let rawTimeLogsArr = new Array();
     let timeLogsPresentation = new Array();
@@ -89,34 +93,43 @@ export class MyTesterComponent implements OnInit {
     let scheduleTime = new Array();
 
     if (data.schedStartTimeUTC != "" && data.schedEndTimeUTC != "") {
-      scheduleTime.push({ dateTime: data.schedStartTimeUTC, source: data.dayType });
-      scheduleTime.push({ dateTime: data.schedEndTimeUTC, source: data.dayType });
+      scheduleTime.push({ dateTime: moment(data.schedStartTimeUTC).format('YYYY-MM-DDTHH:mm:ss') + tzoffset, source: data.dayType });
+      scheduleTime.push({ dateTime: moment(data.schedEndTimeUTC).format('YYYY-MM-DDTHH:mm:ss') + tzoffset, source: data.dayType });
     }
 
     // sir Edzel Sample Response
     let resp = {
-      "timeLogs": [
+      "timeLogs": [],
+      "leave": [
         {
-          "dateTime": "2022-06-15 23:55:00 +00:00",
-          "source": "webbundyclock"
-        },
-        {
-          "dateTime": "2022-06-16 08:10:00 +00:00",
-          "source": "webbundyclock"
+          "leaveStartDate": "2022-07-06T16:00:00+00:00",
+          "leaveEndDate": "2022-07-07T16:00:00+00:00",
+          "status": "Approved"
         }
-      ], "leave": [], "overTime": [], "officialBusiness": [], "changeSchedule": []
+      ],
+      "overTime": [],
+      "officialBusiness": [
+        {
+          "startTime": "2022-07-04T16:00:00+00:00",
+          "endTime": "2022-07-08T01:00:00+00:00",
+          "status": "Approved"
+        }
+      ],
+      "changeSchedule": []
     };
     console.log("Sir Edzel data sample", resp);
     // ---------------------------------------------------------------------------------------------------------------------------------
-    fetchedTimelogs = (resp.timeLogs.length >= 0) ? resp.timeLogs : [];
+    fetchedTimelogs = (resp.timeLogs.length > 0) ? resp.timeLogs : [];
+    fetchedLeaves = (resp.leave.length > 0) ? resp.leave : [];
+    fetchedOTs = (resp.overTime.length > 0) ? resp.overTime : [];
     fetchedOBlogs = (resp.officialBusiness.length > 0) ? resp.officialBusiness : [];
-
+    
     mergedLogsDetails = fetchedTimelogs;
     mergedLogsDetails = scheduleTime.concat(mergedLogsDetails);
     mergedLogsDetails = _.sortBy(mergedLogsDetails, ['dateTime']);
 
     mergedLogsDetails = mergedLogsDetails.map((rawDateTime) => {
-      return { dateTime: moment(rawDateTime.dateTime).format('YYYY-MM-DD HH:mm:ss ') + tzoffset, source: rawDateTime.source };
+      return { dateTime: moment(rawDateTime.dateTime).format('YYYY-MM-DDTHH:mm:ss') + tzoffset, source: rawDateTime.source };
     });
     console.log("mergedLogsDetails", mergedLogsDetails);
 
@@ -131,8 +144,8 @@ export class MyTesterComponent implements OnInit {
           break;
         default:
           if (moment(rawLogJson.dateTime).isAfter(mergedLogsDetails[rawLogIndex - 1].dateTime, 'day')) { // IF Previous dateTime isBefore(current DateTime)
-            GYelevenFiftyNine = moment(mergedLogsDetails[rawLogIndex - 1].dateTime).format('YYYY-MM-DD') + ' 23:59:00 ' + tzoffset;
-            GYtwelveMidnight = moment(mergedLogsDetails[rawLogIndex].dateTime).format('YYYY-MM-DD') + ' 00:00:00 ' + tzoffset;
+            GYelevenFiftyNine = moment(mergedLogsDetails[rawLogIndex - 1].dateTime).format('YYYY-MM-DD') + 'T23:59:00' + tzoffset;
+            GYtwelveMidnight = moment(mergedLogsDetails[rawLogIndex].dateTime).format('YYYY-MM-DD') + 'T00:00:00' + tzoffset;
 
             timeLogArrayPlot.push({
               dateTime: GYelevenFiftyNine,
@@ -163,10 +176,10 @@ export class MyTesterComponent implements OnInit {
 
 
     rawTimeLogsArr.forEach((rowLogArr, rowLogIndex) => {
-      startProgressBarTime = moment(date).format("YYYY-MM-DD ") + " 00:00:00 " + tzoffset;
+      startProgressBarTime = moment(date).format("YYYY-MM-DD") + "T00:00:00" + tzoffset;
 
       let presentationLog = {
-        date: moment(date).format('MMMM DD, YYYY'),
+        date: "",
         startTimeText: "",
         startDateTime: "",
         startSource: "",
@@ -189,7 +202,17 @@ export class MyTesterComponent implements OnInit {
           case 0:
             presentationLog.startDateTime = colLogArr.dateTime;
             presentationLog.startSource = (fetchedTimelogs.length > 0) ? colLogArr.source : "";
-            presentationLog.startTimeText = (fetchedTimelogs.length > 0) ? moment(colLogArr.dateTime).format('hh:mm A') : "Absent";
+
+            if(fetchedTimelogs.length > 0 && fetchedLeaves.length == 0){
+              presentationLog.startTimeText = moment(colLogArr.dateTime).format('hh:mm A');
+            } else if(fetchedTimelogs.length == 0 && fetchedLeaves.length > 0){
+              presentationLog.startTimeText = "Leave";
+            } else if(fetchedTimelogs.length == 0 && fetchedOTs.length > 0){
+              presentationLog.startTimeText = "Overtime";
+            } else if(fetchedTimelogs.length == 0 && fetchedLeaves.length == 0){
+              presentationLog.startTimeText = "Absent";
+            }
+
             break;
           default:
             presentationLog.endDateTime = colLogArr.dateTime;
@@ -201,6 +224,8 @@ export class MyTesterComponent implements OnInit {
         presentationLog.startSource = (fetchedTimelogs.length > 0) ? presentationLog.startSource : this.detailSchedTime;
         presentationLog.logType = "Regular";
       });
+
+      presentationLog.date = moment(presentationLog.startDateTime).format('MMMM DD, YYYY');
 
       // Progress Bar
       compPreProgressBarTime = moment(startProgressBarTime);
@@ -254,8 +279,8 @@ export class MyTesterComponent implements OnInit {
           status: ""
         };
 
-        OBlog.startDateTime = moment(OBrow.startTime).format('YYYY-MM-DD HH:mm:ss ') + tzoffset;
-        OBlog.endDateTime = moment(OBrow.endTime).format('YYYY-MM-DD HH:mm:ss ') + tzoffset;
+        OBlog.startDateTime = moment(OBrow.startTime).format('YYYY-MM-DDTHH:mm:ss') + tzoffset;
+        OBlog.endDateTime = moment(OBrow.endTime).format('YYYY-MM-DDTHH:mm:ss') + tzoffset;
         OBlog.startTimeText = moment(OBrow.startTime).format('hh:mm A');
         OBlog.endTimeText = moment(OBrow.endTime).format('hh:mm A');
         OBlog.startSource = "Official Business";
@@ -287,10 +312,28 @@ export class MyTesterComponent implements OnInit {
     }
 
     outputArray = timeLogsPresentation.concat(OBlogs);
-    // outputArray = _.sortBy(outputArray, ['startDateTime']);
-    // outputArray = _.uniqBy(outputArray, "startTimeText");
+
     console.log("Final Array Output", outputArray);
 
     parent.getLogDetails = outputArray;
   }
 }
+=========================================================
+HTML
+<p>my-tester works!</p>
+<table border="1">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Time Start</th>
+            <th>Time End</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr *ngFor="let log of getLogDetails">
+            <td><p>{{ log.date }}</p></td>
+            <td><p>{{ log.startTimeText }}</p><p><small style="text-transform: capitalize;">{{ log.startSource }} {{ log.status }}</small></p><p><small>{{ log.startDateTime | date: 'longDate' }}</small></p></td>
+            <td><p>{{ log.endTimeText }}</p><p><small style="text-transform: capitalize;">{{ log.endSource }} {{ log.status }}</small></p><p><small>{{ log.endDateTime | date: 'longDate' }}</small></p></td>
+        </tr>
+    </tbody>
+</table>
